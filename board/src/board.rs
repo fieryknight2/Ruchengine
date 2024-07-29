@@ -16,7 +16,7 @@ pub fn square_from_algebraic(sqr: &str) -> u64 {
     let mut rank: u64 = 0;
 
     assert_eq!(sqr.len(), 2, "Invalid algebraic square format");
-    assert!(sqr.chars().nth(0).unwrap_or('z').is_alphabetic(), "Invalid algebraic square format");
+    assert!(sqr.chars().next().unwrap_or('z').is_alphabetic(), "Invalid algebraic square format");
     assert!(sqr.chars().nth(1).unwrap_or('z').is_numeric(), "Invalid algebraic square format");
 
     // Parse the square
@@ -48,7 +48,7 @@ pub fn square_from_algebraic(sqr: &str) -> u64 {
 pub fn square_to_algebraic(square: u64) -> String {
     assert!(0 < square && square < 64, "Invalid square");
 
-    return format!("{}{}", match square % 8 { // square % 8 is the file
+    format!("{}{}", match square % 8 { // square % 8 is the file
         0 => 'a',
         1 => 'b',
         2 => 'c',
@@ -61,7 +61,7 @@ pub fn square_to_algebraic(square: u64) -> String {
             assert!(false, "Invalid square");
             'z'
         }
-    }, square / 8 + 1); // square / 8 is the rank
+    }, square / 8 + 1) // square / 8 is the rank
 }
 
 pub fn create_board() -> Board {
@@ -99,10 +99,7 @@ pub fn create_board_from_string(string: &str) -> Board {
                 'r' | 'R' => 3,
                 'q' | 'Q' => 4,
                 'k' | 'K' => 5,
-                _ => {
-                    assert!(false, "Invalid fen format");
-                    0
-                }
+                _ => { panic!("Invalid fen format"); }
             }] |= 1u64 << square;
             board.bitboards[if file.is_uppercase() { WHITE_PIECES } else { BLACK_PIECES }] |= 1u64 << square;
             current_file += 1;
@@ -113,29 +110,31 @@ pub fn create_board_from_string(string: &str) -> Board {
 }
 
 pub fn create_default_board() -> Board {
-    return create_board_from_string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR");
+    create_board_from_string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR")
 }
 
 impl Board {
     pub fn all_pieces(&self) -> u64 {
-        return self.bitboards[WHITE_PIECES] | self.bitboards[BLACK_PIECES];
+        self.bitboards[WHITE_PIECES] | self.bitboards[BLACK_PIECES]
     }
 
     pub fn white_pieces(&self) -> u64 {
-        return self.bitboards[WHITE_PIECES];
+        self.bitboards[WHITE_PIECES]
     }
 
     pub fn black_pieces(&self) -> u64 {
-        return self.bitboards[BLACK_PIECES];
+        self.bitboards[BLACK_PIECES]
     }
 
     pub fn print_board(&self) {
         const PIECE_REP: [char; 6] = ['P', 'N', 'B', 'R', 'Q', 'K'];
         let mut board: [char; 64] = ['.'; 64];
         // Generate the visible board
-        for piece_type in 0..6 {
+        for (piece_type, bitboard) in self.bitboards.iter().enumerate() {
+            if piece_type == 6 || piece_type == 7 { continue; }
+
             for square in 0..64 {
-                if (self.bitboards[piece_type] & (1u64 << square)) != 0 {
+                if (bitboard & (1u64 << square)) != 0 {
                     board[square] = if self.bitboards[WHITE_PIECES] & (1u64 << square) != 0 {
                         PIECE_REP[piece_type]
                     } else {
