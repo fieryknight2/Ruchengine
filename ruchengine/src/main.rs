@@ -1,4 +1,4 @@
-use board::board;
+use crate::board::Board;
 
 fn main() {
     println!("Hello, world!");
@@ -10,6 +10,8 @@ fn main() {
 
     let second_board = board::create_board_from_string("r2q1rk1/2p1bppp/p2p1n2/1p2P3/4P1b1/1nP1BN2/PP3PPP/RN1QR1K1");
     second_board.print_board();
+
+    Ok(())
 }
 #[cfg(test)]
 mod test2 {
