@@ -7,8 +7,29 @@
 const WHITE_PIECES: usize = 6;
 const BLACK_PIECES: usize = 7;
 
+pub const PAWN: usize = 0;
+pub const KNIGHT: usize = 1;
+pub const BISHOP: usize = 2;
+pub const ROOK: usize = 3;
+pub const QUEEN: usize = 4;
+pub const KING: usize = 5;
+
 pub struct Board {
     pub bitboards: [u64; 8],
+}
+
+pub fn print_bitboard(bitboard: u64, on: char, off: char) {
+    for r in 0..8 {
+        for c in 0..8 {
+            if (bitboard & (1u64 << (r * 8 + (7 - c)))) != 0 {
+                print!("{} ", on);
+            } else {
+                print!("{} ", off);
+            }
+        }
+        println!();
+    }
+    println!();
 }
 
 pub fn square_from_algebraic(sqr: &str) -> u64 {
