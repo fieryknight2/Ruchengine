@@ -52,45 +52,13 @@ impl Move {
     }
 
     pub fn make_move(&self, board: &mut Board) -> u64 { // returns an en passant square
-        // println!("Before move {}{}", square_to_algebraic(self.from), square_to_algebraic(self.to));
+        // println!("Before move {}{}={}", square_to_algebraic(self.from), square_to_algebraic(self.to), self.promotion_type);
         // board.print_board();
         let piece_type = find_piece_type(board, self.from);
         let piece_bitboard = get_bitboard_val(piece_type);
 
         board.bitboards[piece_bitboard] &= !(1u64 << self.from); // clear the piece from the old square
         board.bitboards[piece_bitboard] |= 1u64 << self.to; // set the piece to the new square
-
-        if self.is_castle() {
-            let (rook_pos, rook_n_pos, color) = self.get_castle_rook_pos();
-
-            board.bitboards[color] |= 1u64 << rook_n_pos; // Set the rook
-            board.bitboards[color] &= !(1u64 << rook_pos); // Remove the rook
-            board.bitboards[ROOK] |= 1u64 << rook_n_pos; // Set the rook
-            board.bitboards[ROOK] &= !(1u64 << rook_pos); // Remove the rook
-        }
-
-        if self.en_passant != 0 {
-            if piece_type.is_uppercase() {
-                let clear = !(1u64 << (5 * 8 + (self.from as i32 % 8) + self.en_passant));
-                board.bitboards[7] &= clear; // clear the taken pawn
-                board.bitboards[0] &= clear;
-            } else {
-                let clear = !(1u64 << (4 * 8 + (self.from as i32 % 8) + self.en_passant));
-                board.bitboards[6] &= clear;
-                board.bitboards[0] &= clear;
-            }
-        }
-
-        if self.promotion_type != 'z' {
-            match self.promotion_type {
-                'q' | 'Q' => { board.bitboards[4] |= 1u64 << self.to; }
-                'r' | 'R' => { board.bitboards[3] |= 1u64 << self.to; }
-                'b' | 'B' => { board.bitboards[2] |= 1u64 << self.to; }
-                'n' | 'N' => { board.bitboards[1] |= 1u64 << self.to; }
-                _ => { unreachable!("Invalid promotion type {}", self.promotion_type); }
-            }
-            board.bitboards[piece_bitboard] &= !(1u64 << self.to); // clear the promoted pawn
-        }
 
         let capture_bitboard = match self.capture {
             'p' | 'P' => 0,
@@ -114,6 +82,39 @@ impl Move {
             }
         }
 
+        if self.promotion_type != 'z' {
+            board.bitboards[match self.promotion_type {
+                'n' => 1,
+                'b' => 2,
+                'r' => 3,
+                'q' => 4,
+                _ => { unreachable!("Invalid promotion type {}", self.promotion_type); }
+            }] |= 1u64 << self.to; // set the promoted piece
+
+            board.bitboards[0] &= !(1u64 << self.to); // clear the promoted pawn
+        }
+
+        if self.is_castle() {
+            let (rook_pos, rook_n_pos, color) = self.get_castle_rook_pos();
+
+            board.bitboards[color] |= 1u64 << rook_n_pos; // Set the rook
+            board.bitboards[color] &= !(1u64 << rook_pos); // Remove the rook
+            board.bitboards[ROOK] |= 1u64 << rook_n_pos; // Set the rook
+            board.bitboards[ROOK] &= !(1u64 << rook_pos); // Remove the rook
+        }
+
+        if self.en_passant != 0 {
+            if piece_type.is_uppercase() {
+                let clear = !(1u64 << (4 * 8 + (self.from as i32 % 8) - self.en_passant));
+                board.bitboards[7] &= clear; // clear the taken pawn
+                board.bitboards[0] &= clear;
+            } else {
+                let clear = !(1u64 << (3 * 8 + (self.from as i32 % 8) - self.en_passant));
+                board.bitboards[6] &= clear;
+                board.bitboards[0] &= clear;
+            }
+        }
+
         // Set the color bitboards
         if piece_type.is_uppercase() {
             board.bitboards[6] &= !(1u64 << self.from);
@@ -122,6 +123,9 @@ impl Move {
             board.bitboards[7] &= !(1u64 << self.from);
             board.bitboards[7] |= 1u64 << self.to;
         }
+
+        // board.print_board();
+        // println!("Move made");
 
         if piece_type == 'p' {
             if self.from / 8 == 6 && self.to / 8 == 4 {
@@ -141,8 +145,10 @@ impl Move {
     }
 
     pub fn unmake_move(&self, board: &mut Board) {
-        let piece_type = find_piece_type(board, self.to);
-        let piece_bitboard = get_bitboard_val(piece_type);
+        let mut piece_type = find_piece_type(board, self.to);
+        let mut piece_bitboard = get_bitboard_val(piece_type);
+        // println!("Unmaking move");
+        // board.print_board();
 
         if self.is_castle() {
             let (rook_pos, rook_n_pos, color) = self.get_castle_rook_pos();
@@ -154,27 +160,25 @@ impl Move {
         }
 
         if self.promotion_type != 'z' {
-            board.bitboards[match self.promotion_type {
-                'n' | 'N' => 1,
-                'b' | 'B' => 2,
-                'r' | 'R' => 3,
-                'q' | 'Q' => 4,
-                _ => { unreachable!("Invalid promotion type {}", self.promotion_type); }
-            }] &= !(1u64 << self.to); // clear the promoted piece
+            board.bitboards[piece_bitboard] &= !(1u64 << self.to); // clear the promoted piece
+
+            piece_type = if piece_type.is_uppercase() { 'P' } else { 'p' };
+            piece_bitboard = 0;
         }
 
 
         if self.en_passant != 0 {
             if piece_type.is_uppercase() {
-                let set = 1u64 << (5 * 8 + (self.from as i32 % 8) + self.en_passant);
+                let set = 1u64 << (4 * 8 + (self.from as i32 % 8) - self.en_passant);
                 board.bitboards[7] |= set; // Add the taken pawn back in
                 board.bitboards[0] |= set;
             } else {
-                let set = 1u64 << (4 * 8 + (self.from as i32 % 8) + self.en_passant);
+                let set = 1u64 << (3 * 8 + (self.from as i32 % 8) - self.en_passant);
                 board.bitboards[6] |= set;
                 board.bitboards[0] |= set;
             }
         }
+
         board.bitboards[piece_bitboard] &= !(1u64 << self.to);
         board.bitboards[piece_bitboard] |= 1u64 << self.from;
 
@@ -294,7 +298,10 @@ fn get_piece_moves_wa(attacks: &GeneratorBoard, square: u64, en_passant: u64) ->
             };
         }
     }
-    panic!("No piece on the given square");
+    // attacks.board.print_board();
+    // print_bitboard(attacks.board.white_pieces(), 'W', '.');
+    // print_bitboard(attacks.board.black_pieces(), 'B', '.');
+    panic!("No piece on the given square {}", square_to_algebraic(square));
 }
 
 pub fn find_piece_type(board: &Board, square: u64) -> char {
@@ -328,7 +335,7 @@ pub fn find_piece_type(board: &Board, square: u64) -> char {
     panic!("No piece on the given square");
 }
 
-fn count_check(board: &GeneratorBoard, white: bool) -> (bool, u64) {
+fn count_check(board: &GeneratorBoard, white: bool, en_passant: u64) -> (bool, u64) {
     let mut possible_blocks: u64 = 0;
     let mut count: u64 = 0;
     for square in 0..64 {
@@ -350,6 +357,17 @@ fn count_check(board: &GeneratorBoard, white: bool) -> (bool, u64) {
                         return (true, 0); // double check
                     } else {
                         count = 1;
+
+                        // Allow en passant capture
+                        if piece == 0 && en_passant > 15 && en_passant < 48 {
+                            if white {
+                                if en_passant == square + 8 {
+                                    possible_blocks |= 1u64 << en_passant; // allow en passant
+                                }
+                            } else if en_passant == square - 8 {
+                                possible_blocks |= 1u64 << square;
+                            }
+                        }
 
                         possible_blocks |= 1u64 << square; // allow capture of the piece
                         possible_blocks |= match piece {
@@ -393,6 +411,14 @@ pub fn in_check(board: &Board, white: bool) -> bool {
     false
 }
 
+// fn check_move(board: &mut Board, move_: &Move, white: bool) -> bool {
+//     move_.make_move(board);
+//     let val = in_check(board, white);
+//     move_.unmake_move(board);
+//
+//     val
+// }
+
 pub fn get_moves(board: &Board, en_passant: u64, castle_rights: u32, white: bool) -> Vec<Move> {
     let mut moves: Vec<Move> = Vec::new();
 
@@ -406,7 +432,7 @@ pub fn get_moves(board: &Board, en_passant: u64, castle_rights: u32, white: bool
     if (white && ((att_board.black_attacks & (1u64 << att_board.white_king)) != 0)) ||
         (!white && ((att_board.white_attacks & (1u64 << att_board.black_king)) != 0)) {
         // in check
-        (double_check, possible_squares) = count_check(&att_board, white);
+        (double_check, possible_squares) = count_check(&att_board, white, en_passant);
         // board.print_board();
         // board::print_bitboard(possible_squares, 'X', '.');
     }
@@ -443,6 +469,7 @@ pub fn get_moves(board: &Board, en_passant: u64, castle_rights: u32, white: bool
         let possible_moves = get_piece_moves_wa(&att_board, square, en_passant) &
             (if find_piece_type(board, square) != king_type { possible_squares } else { !0u64 });
 
+        if possible_moves == 0 { continue; } // No moves, no reason to loop through them
         for pm_square in 0..64 {
             if possible_moves & (1u64 << pm_square) != 0 {
                 let move_piece_type = find_piece_type(board, square);
@@ -463,6 +490,9 @@ pub fn get_moves(board: &Board, en_passant: u64, castle_rights: u32, white: bool
                             capture,
                             castle_rights,
                         });
+                        // if check_move(&mut check_board, &n_move, white) {
+                        //     moves.push(n_move);
+                        // }
                     }
                     break;
                 } else {
@@ -544,15 +574,15 @@ pub fn get_moves(board: &Board, en_passant: u64, castle_rights: u32, white: bool
 fn is_en_passant(board: &Board, from: u64, to: u64) -> i32 {
     let piece_type = find_piece_type(board, from);
     if piece_type == 'p' {
-        if from / 8 == 4 && to / 8 == 3 { // Capture
-            if ((1u64 << (4 * 8 + (to % 8))) & board.bitboards[0]) != 0 &&
-                ((1u64 << to) & board.bitboards[0]) == 0 {
+        if from / 8 == 3 && to / 8 == 2 { // Capture
+            if ((1u64 << (3 * 8 + (to % 8))) & board.bitboards[0]) != 0 && // Pawn on same rank
+                ((1u64 << to) & board.all_pieces()) == 0 {
                 return (from % 8) as i32 - (to % 8) as i32;
             }
         }
-    } else if piece_type == 'P' && from / 8 == 5 && to / 8 == 6 &&
-        ((1u64 << (5 * 8 + (to % 8))) & board.bitboards[0]) != 0 && // Pawn on same rank
-        ((1u64 << to) & if piece_type.is_uppercase() { board.black_pieces() } else { board.white_pieces() }) == 0 { // No pieces where taking
+    } else if piece_type == 'P' && from / 8 == 4 && to / 8 == 5 &&
+        ((1u64 << (4 * 8 + (to % 8))) & board.bitboards[0]) != 0 &&
+        ((1u64 << to) & board.all_pieces()) == 0 { // No pieces where taking
         return (from % 8) as i32 - (to % 8) as i32;
     }
 
@@ -561,7 +591,7 @@ fn is_en_passant(board: &Board, from: u64, to: u64) -> i32 {
 
 fn piece_on_top_left(board: &GeneratorBoard, square: u64, target_bitboard: u64) -> bool {
     let mut index = square;
-    while (index % 8 > 0) && (index / 8 < 8) && (index < 58) {
+    while (index % 8 > 0) && (index / 8 < 8) && (index < 57) {
         index += 7;
 
         if (board.board.all_pieces() & (1u64 << index)) != 0 {
@@ -897,7 +927,7 @@ fn get_pawn_moves(board: GeneratorBoard, square: u64, en_passant: u64) -> u64 {
     let target_bishop = (board.board.bitboards[BISHOP] | board.board.bitboards[QUEEN]) & target_pieces;
     let target_rook = (board.board.bitboards[ROOK] | board.board.bitboards[QUEEN]) & target_pieces;
 
-    let passant_square = if square > 23 && square < 40 { check_en_passant(board.board, square, en_passant) } else { 0 };
+    let passant_square = if square > 15 && square < 48 { check_en_passant(board.board, square, en_passant) } else { 0 };
 
     fn right_attacks(board: &Board, square: u64, en_passant: u64) -> u64 {
         if board.white_pieces() & (1u64 << square) != 0 {
@@ -905,7 +935,7 @@ fn get_pawn_moves(board: GeneratorBoard, square: u64, en_passant: u64) -> u64 {
                 (1u64 << (square + 9)) & (board.black_pieces() | en_passant)
             } else { 0 }
         } else if square % 8 < 7 {
-            (1u64 << (square - 7)) & (board.white_pieces() | en_passant)
+            (1u64 << (square - 9)) & (board.white_pieces() | en_passant)
         } else { 0 }
     }
 
@@ -915,7 +945,7 @@ fn get_pawn_moves(board: GeneratorBoard, square: u64, en_passant: u64) -> u64 {
                 (1u64 << (square + 7)) & (board.black_pieces() | en_passant)
             } else { 0 }
         } else if square % 8 > 0 {
-            (1u64 << (square - 9)) & (board.white_pieces() | en_passant)
+            (1u64 << (square - 7)) & (board.white_pieces() | en_passant)
         } else { 0 }
     }
 

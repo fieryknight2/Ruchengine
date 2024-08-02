@@ -60,11 +60,30 @@ pub fn count_moves(board: &mut board::Board, castle_rights: u32, white: bool, mu
             perft.en_passant_count += if move_.en_passant != 0 { 1 } else { 0 };
 
             move_.unmake_move(board);
+            if check_overlap(board) {
+                println!("Piece overlap caused by move {}{}", square_to_algebraic(move_.from), square_to_algebraic(move_.to));
+            }
             println!("{}{}: {}", square_to_algebraic(move_.from), square_to_algebraic(move_.to), 1);
         }
     }
 
     perft
+}
+
+fn check_overlap(board: &board::Board) -> bool {
+    for piece in 0..6 {
+        for alt in 0..6 {
+            if piece == alt { continue; }
+            if board.bitboards[piece] & board.bitboards[alt] != 0 {
+                println!("Piece {} and {} overlap", piece, alt);
+                board::print_bitboard(board.bitboards[piece], usize::to_string(&piece).chars().next().unwrap(), '.');
+                board::print_bitboard(board.bitboards[alt], usize::to_string(&alt).chars().next().unwrap(), '.');
+                return true;
+            }
+        }
+    }
+
+    false
 }
 
 fn recursive_count_moves(board: &mut board::Board, move_: moves::Move, castle_rights: u32, white: bool, depth: u32) -> PerftStats {
@@ -114,20 +133,35 @@ fn recursive_count_moves(board: &mut board::Board, move_: moves::Move, castle_ri
         }
     }
 
-    //print!("{{");
+    // print!("{{");
     for n_move in move_list {
-        //print!("{}{}, ", square_to_algebraic(n_move.from), square_to_algebraic(n_move.to));
+        // print!("{}{}, ", square_to_algebraic(n_move.from), square_to_algebraic(n_move.to));
         if depth == 0 {
-            if n_move.capture != 'z' {
-                perft.capture_count += 1;
+            if n_move.promotion_type != 'Q' {
+                if n_move.capture != 'z' {
+                    perft.capture_count += 1;
+                }
+                if n_move.promotion_type != 'z' { perft.promotion_count += 1; }
+                perft.total_count += 1;
+                perft.en_passant_count += if n_move.en_passant != 0 { 1 } else { 0 };
+                perft.check_count += if n_move.en_passant != 0 { 1 } else { 0 };
             }
-            if n_move.promotion_type != 'z' { perft.promotion_count += 1; }
-            perft.total_count += 1;
-            perft.en_passant_count += if n_move.en_passant != 0 { 1 } else { 0 };
+            // println!("Before {}{} {},{}", square_to_algebraic(n_move.from), square_to_algebraic(n_move.to), n_move.from, n_move.to);
+            // if n_move.is_castle() {
+            //     board.print_board();
+            // }
             n_move.make_move(board);
-            perft.check_count += if n_move.en_passant != 0 { 1 } else { 0 };
-            perft.check_count += if moves::in_check(board, !white) { 1 } else { 0 };
+            if n_move.promotion_type != 'Q' {
+                perft.check_count += if moves::in_check(board, !white) { 1 } else { 0 };
+            }
             n_move.unmake_move(board);
+            // println!("After");
+            // board.print_board();
+            if check_overlap(board) {
+                board.print_board();
+                println!("Piece overlap caused by move {}{}", square_to_algebraic(n_move.from), square_to_algebraic(n_move.to));
+                panic!("Piece overlap emergency quit")
+            }
         } else {
             let result = recursive_count_moves(board, n_move, ncastle_rights, !white, depth - 1);
             perft.capture_count += result.capture_count;
@@ -138,7 +172,7 @@ fn recursive_count_moves(board: &mut board::Board, move_: moves::Move, castle_ri
             perft.en_passant_count += result.en_passant_count;
         }
     }
-    //println!("}}");
+    // println!("}}");
     move_.unmake_move(board);
 
     perft
@@ -147,10 +181,11 @@ fn recursive_count_moves(board: &mut board::Board, move_: moves::Move, castle_ri
 #[cfg(test)]
 mod tests {
     use crate::{board, count_moves};
+    use crate::moves::{CASTLE_WHITE_KING_SIDE, CASTLE_WHITE_QUEEN_SIDE};
 
-    fn test(string: &str, depth: u32, expected: u64, castle_rights: u32, white: bool) {
+    fn test(string: &str, depth: u32, expected: u64, castle_rights: u32, white: bool, en_passant: &str) {
         let mut board = board::create_board_from_string(string);
-        let perft = count_moves(&mut board, castle_rights, white, 0, depth);
+        let perft = count_moves(&mut board, castle_rights, white, if en_passant.len() == 2 { board::square_from_algebraic(en_passant) } else { 0 }, depth);
         println!("Promotion Count: {}, Capture Count: {}, Check Count: {}, Castle Count {}, En Passant Count {}",
                  perft.promotion_count, perft.capture_count, perft.check_count, perft.castle_count, perft.en_passant_count);
         println!("Total Count: {}", perft.total_count);
@@ -161,37 +196,43 @@ mod tests {
 
     #[test]
     fn test_3() {
-        // test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8", 0, 14, 0, true);
-        // test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8", 1, 191, 0, true);
-        // test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8", 2, 2812, 0, true);
-        test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8", 3, 43_238, 0, true);
-        test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8", 4, 674_624, 0, true);
+        // test("8/2p5/3p4/KP5r/5R1k/8/4P1P1/8", 3, 10776, 0, false, "");
+        test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8", 4, 674_624, 0, true, "");
     }
 
     #[test]
     fn test_board() {
-        // test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 0, 20, 0b1111, true);
-        // test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 1, 400, 0b1111, true);
-        // test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 2, 8_902, 0b1111, true);
-        // test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 3, 197_281, 0b1111, true);
-        test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 4, 4_865_609, 0b1111, true);
-        test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 5, 119_060_324, 0b1111, true);
-        test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 6, 3_195_901_860, 0b1111, true);
+        // test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 0, 20, 0b1111, true, "");
+        // test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 1, 400, 0b1111, true, "");
+        // test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 2, 8_902, 0b1111, true, "");
+        test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 3, 197_281, 0b1111, true, "");
+        test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 4, 4_865_609, 0b1111, true, "");
+        test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 5, 119_060_324, 0b1111, true, "");
+        test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 6, 3_195_901_860, 0b1111, true, "");
+    }
+
+    #[test]
+    fn test_perft_5() {
+        // test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R", 0, 44, CASTLE_WHITE_KING_SIDE | CASTLE_WHITE_QUEEN_SIDE, true, "");
+        // test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R", 1, 1_486, CASTLE_WHITE_KING_SIDE | CASTLE_WHITE_QUEEN_SIDE, true, "");
+        test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R", 2, 62_379, CASTLE_WHITE_KING_SIDE | CASTLE_WHITE_QUEEN_SIDE, true, "");
+
+        // test("rnbq1k1r/pp1Pbppp/2p4B/8/2B5/8/PPP1NnPP/RN1QK2R", 0, 31, CASTLE_WHITE_KING_SIDE | CASTLE_WHITE_QUEEN_SIDE, false, "");
     }
 
     #[test]
     fn test_board_temp() {
-        test("rnbqkbnr/pppppppp/8/8/8/3P4/PPP1PPPP/RNBQKBNR", 3, 328511, 0b1111, false);
-        // test("rnbqkbnr/pppp1ppp/8/4p3/8/3P4/PPP1PPPP/RNBQKBNR", 2, 21639, 0b1111, true);
-        // test("rnbqkbnr/pppp1ppp/8/4p3/8/2PP4/PP2PPPP/RNBQKBNR", 1, 832, 0b1111, false);
-        // test("rnbqk1nr/pppp1ppp/8/4p3/1b6/2PP4/PP2PPPP/RNBQKBNR", 0, 27, 0b1111, true);
+        // test("rnbqkbnr/pppppppp/8/8/8/3P4/PPP1PPPP/RNBQKBNR", 3, 328511, 0b0000, false);
+        test("8/2p5/3p4/KP5r/1R3p1k/6P1/4P3/8", 2, 1014, 0b0000, false, "");
+        // test("rnbqkbnr/pppp1ppp/8/4p3/8/2PP4/PP2PPPP/RNBQKBNR", 1, 832, 0b0000, false);
+        // test("rnbqk1nr/pppp1ppp/8/4p3/1b6/2PP4/PP2PPPP/RNBQKBNR", 0, 27, 0b0000, true);
     }
 
     #[test]
     fn test_perft() {
-        // test("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R", 0, 48, 0b1111, true);
-        test("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R", 1, 2_039, 0b1111, true);
-        // test("rnbqkbnr/p1pppppp/1p6/8/8/P7/RPPPPPPP/1NBQKBNR", 2, 97_862, 0b1111, true);
+        // test("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R", 0, 48, 0b1111, true, "");
+        test("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R", 1, 2_039, 0b1111, true, "");
+        test("rnbqkbnr/p1pppppp/1p6/8/8/P7/RPPPPPPP/1NBQKBNR", 2, 97_862, 0b1111, true, "");
     }
 
     // #[test]
