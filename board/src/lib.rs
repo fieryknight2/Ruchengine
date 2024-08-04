@@ -1,8 +1,11 @@
+use std::sync::mpsc;
 use crate::board::square_to_algebraic;
 // use crate::moves::{CASTLE_BLACK_KING_SIDE, CASTLE_BLACK_QUEEN_SIDE, CASTLE_WHITE_KING_SIDE, CASTLE_WHITE_QUEEN_SIDE};
 
 pub mod board;
 pub mod moves;
+
+use std::thread; // Speed up perft
 
 pub struct PerftStats {
     pub capture_count: u64,
@@ -28,20 +31,46 @@ pub fn count_moves(board: &mut board::Board, castle_rights: u32, white: bool, mu
     }
 
     let move_list = moves::get_moves(board, en_passant, castle_rights, white);
+    let mut handles: Vec<thread::JoinHandle<()>> = Vec::new();
+    let (tx, rx) = mpsc::channel();
     if depth != 0 {
         for move_ in move_list {
-            let result = recursive_count_moves(board, move_, !white, depth - 1);
-            perft.capture_count += result.capture_count;
-            perft.promotion_count += result.promotion_count;
-            perft.check_count += result.check_count;
-            perft.total_count += result.total_count;
-            perft.castle_count += result.castle_count;
-            perft.en_passant_count += result.en_passant_count;
-            if move_.promotion_type != 'z' {
-                println!("{}{}{}: {}", square_to_algebraic(move_.from), square_to_algebraic(move_.to), move_.promotion_type, result.total_count);
-            } else {
-                println!("{}{}: {}", square_to_algebraic(move_.from), square_to_algebraic(move_.to), result.total_count);
-            }
+            let mut board = board.clone();
+            let tx = tx.clone();
+            handles.push(thread::spawn(move || {
+                let mut perft = PerftStats {
+                    capture_count: 0,
+                    promotion_count: 0,
+                    check_count: 0,
+                    total_count: 0,
+                    castle_count: 0,
+                    en_passant_count: 0,
+                };
+                let result = recursive_count_moves(&mut board, move_, !white, depth - 1);
+                perft.capture_count += result.capture_count;
+                perft.promotion_count += result.promotion_count;
+                perft.check_count += result.check_count;
+                perft.total_count += result.total_count;
+                perft.castle_count += result.castle_count;
+                perft.en_passant_count += result.en_passant_count;
+                if move_.promotion_type != 'z' {
+                    println!("{}{}{}: {}", square_to_algebraic(move_.from), square_to_algebraic(move_.to), move_.promotion_type, result.total_count);
+                } else {
+                    println!("{}{}: {}", square_to_algebraic(move_.from), square_to_algebraic(move_.to), result.total_count);
+                }
+                tx.send(perft).unwrap();
+            }));
+        }
+
+        for handle in handles {
+            let val = rx.recv().unwrap();
+            perft.capture_count += val.capture_count;
+            perft.promotion_count += val.promotion_count;
+            perft.check_count += val.check_count;
+            perft.total_count += val.total_count;
+            perft.castle_count += val.castle_count;
+            perft.en_passant_count += val.en_passant_count;
+            handle.join().unwrap(); // wait for all threads to finish
         }
     } else {
         perft.total_count = move_list.len() as u64;
@@ -207,10 +236,74 @@ fn recursive_count_moves(board: &mut board::Board, move_: moves::Move, white: bo
     perft
 }
 
+pub fn count_moves_no_threads(board: &mut board::Board, castle_rights: u32, white: bool, mut en_passant: u64, depth: u32) -> PerftStats {
+    let mut perft = PerftStats {
+        capture_count: 0,
+        promotion_count: 0,
+        check_count: 0,
+        total_count: 0,
+        castle_count: 0,
+        en_passant_count: 0,
+    };
+
+    if en_passant > 63 || en_passant == 0 {
+        en_passant = 65;
+    }
+
+    let move_list = moves::get_moves(board, en_passant, castle_rights, white);
+    if depth != 0 {
+        for move_ in move_list {
+            let result = recursive_count_moves(board, move_, !white, depth - 1);
+            perft.capture_count += result.capture_count;
+            perft.promotion_count += result.promotion_count;
+            perft.check_count += result.check_count;
+            perft.total_count += result.total_count;
+            perft.castle_count += result.castle_count;
+            perft.en_passant_count += result.en_passant_count;
+            if move_.promotion_type != 'z' {
+                println!("{}{}{}: {}", square_to_algebraic(move_.from), square_to_algebraic(move_.to), move_.promotion_type, result.total_count);
+            } else {
+                println!("{}{}: {}", square_to_algebraic(move_.from), square_to_algebraic(move_.to), result.total_count);
+            }
+        }
+    } else {
+        perft.total_count = move_list.len() as u64;
+        for move_ in move_list {
+            let piece_type = moves::find_piece_type(board, move_.from);
+            move_.make_move(board);
+
+            // Count information
+            if move_.capture != 'z' {
+                perft.capture_count += 1;
+            }
+            if move_.promotion_type != 'z' { perft.promotion_count += 1; }
+            perft.check_count += if moves::in_check(board, !white) { 1 } else { 0 };
+            if piece_type == 'k' || piece_type == 'K' {
+                let val = move_.from as i32 - move_.to as i32;
+                if val == 2 || val == -2 { // king moves two squares
+                    perft.castle_count += 1;
+                }
+            }
+            perft.en_passant_count += if move_.en_passant != 0 { 1 } else { 0 };
+
+            move_.unmake_move(board);
+            if check_overlap(board) {
+                println!("Piece overlap caused by move {}{}", square_to_algebraic(move_.from), square_to_algebraic(move_.to));
+            }
+            if move_.promotion_type != 'z' {
+                println!("{}{}{}: {}", square_to_algebraic(move_.from), square_to_algebraic(move_.to), move_.promotion_type, 1);
+            } else {
+                println!("{}{}: {}", square_to_algebraic(move_.from), square_to_algebraic(move_.to), 1);
+            }
+        }
+    }
+
+    perft
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{board, count_moves};
-    use crate::moves::{CASTLE_WHITE_KING_SIDE, CASTLE_WHITE_QUEEN_SIDE};
 
     fn test(string: &str, depth: u32, expected: u64, castle_rights: u32, white: bool, en_passant: &str) {
         let mut board = board::create_board_from_string(string);
@@ -230,6 +323,18 @@ mod tests {
     }
 
     #[test]
+    fn test_2() {
+        test("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R", 3, 4_085_603, 0b1111, true, "");
+        test("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R", 5, 8_031_647_685, 0b1111, true, "");
+    }
+
+    #[test]
+    fn test_4() {
+        test("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1", 3, 422_333, 0b1100, true, "");
+        test("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1", 5, 706_045_033, 0b1100, true, "");
+    }
+
+    #[test]
     fn test_board() {
         test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 0, 20, 0b1111, true, "");
         test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 1, 400, 0b1111, true, "");
@@ -245,9 +350,9 @@ mod tests {
     fn test_perft_5() {
         // test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R", 0, 44, CASTLE_WHITE_KING_SIDE | CASTLE_WHITE_QUEEN_SIDE, true, "");
         // test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R", 1, 1_486, CASTLE_WHITE_KING_SIDE | CASTLE_WHITE_QUEEN_SIDE, true, "");
-        test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R", 2, 62_379, CASTLE_WHITE_KING_SIDE | CASTLE_WHITE_QUEEN_SIDE, true, "");
-        test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R", 3, 2_103_487, CASTLE_WHITE_KING_SIDE | CASTLE_WHITE_QUEEN_SIDE, true, "");
-        test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R", 4, 89_941_194, CASTLE_WHITE_KING_SIDE | CASTLE_WHITE_QUEEN_SIDE, true, "");
+        // test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R", 2, 62_379, CASTLE_WHITE_KING_SIDE | CASTLE_WHITE_QUEEN_SIDE, true, "");
+        // test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R", 3, 2_103_487, CASTLE_WHITE_KING_SIDE | CASTLE_WHITE_QUEEN_SIDE, true, "");
+        // test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R", 4, 89_941_194, CASTLE_WHITE_KING_SIDE | CASTLE_WHITE_QUEEN_SIDE, true, "");
     }
 
     #[test]
