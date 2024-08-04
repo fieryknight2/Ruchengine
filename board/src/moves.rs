@@ -458,7 +458,7 @@ pub fn get_moves(board: &Board, en_passant: u64, castle_rights: u32, white: bool
 
     if double_check {
         // Only king can move
-        let possible_moves = get_piece_moves_wa(&att_board, att_board.white_king, en_passant);
+        let possible_moves = get_piece_moves_wa(&att_board, if white { att_board.white_king } else { att_board.black_king }, en_passant);
         for pm_square in 0..64 {
             if possible_moves & (1u64 << pm_square) != 0 {
                 let mut capture = 'z';
