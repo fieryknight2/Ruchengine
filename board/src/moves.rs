@@ -384,7 +384,7 @@ fn count_check(board: &GeneratorBoard, white: bool, en_passant: u64) -> (bool, u
                                     possible_blocks |= 1u64 << en_passant; // allow en passant
                                 }
                             } else if en_passant == square - 8 {
-                                possible_blocks |= 1u64 << square;
+                                possible_blocks |= 1u64 << en_passant;
                             }
                         }
 
