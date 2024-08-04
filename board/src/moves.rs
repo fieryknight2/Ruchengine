@@ -51,11 +51,12 @@ impl Move {
         (rook_pos, rook_n_pos, color)
     }
 
-    pub fn make_move(&self, board: &mut Board) -> u64 { // returns an en passant square
+    pub fn make_move(&self, board: &mut Board) -> (u64, u32) { // returns an en passant square and castle rights
         // println!("Before move {}{}={}", square_to_algebraic(self.from), square_to_algebraic(self.to), self.promotion_type);
         // board.print_board();
         let piece_type = find_piece_type(board, self.from);
         let piece_bitboard = get_bitboard_val(piece_type);
+        let mut castle_rights = self.castle_rights;
 
         board.bitboards[piece_bitboard] &= !(1u64 << self.from); // clear the piece from the old square
         board.bitboards[piece_bitboard] |= 1u64 << self.to; // set the piece to the new square
@@ -94,13 +95,31 @@ impl Move {
             board.bitboards[0] &= !(1u64 << self.to); // clear the promoted pawn
         }
 
-        if self.is_castle() {
+        if (piece_type == 'k' || piece_type == 'K') && self.is_castle() {
             let (rook_pos, rook_n_pos, color) = self.get_castle_rook_pos();
 
             board.bitboards[color] |= 1u64 << rook_n_pos; // Set the rook
             board.bitboards[color] &= !(1u64 << rook_pos); // Remove the rook
             board.bitboards[ROOK] |= 1u64 << rook_n_pos; // Set the rook
             board.bitboards[ROOK] &= !(1u64 << rook_pos); // Remove the rook
+
+            if piece_type.is_uppercase() { // clear the castling rights for that side
+                castle_rights &= !(CASTLE_WHITE_QUEEN_SIDE | CASTLE_WHITE_KING_SIDE);
+            } else {
+                castle_rights &= !(CASTLE_BLACK_QUEEN_SIDE | CASTLE_BLACK_KING_SIDE);
+            }
+        }
+        if piece_type == 'K' {
+            castle_rights &= !(CASTLE_WHITE_KING_SIDE | CASTLE_WHITE_QUEEN_SIDE);
+        }
+        if piece_type == 'k' {
+            castle_rights &= !(CASTLE_BLACK_QUEEN_SIDE | CASTLE_BLACK_KING_SIDE);
+        }
+        if piece_type == 'R' || piece_type == 'r' {
+            if self.from == 0 { castle_rights &= !(CASTLE_WHITE_QUEEN_SIDE) }
+            if self.from == 7 { castle_rights &= !(CASTLE_WHITE_KING_SIDE) }
+            if self.from == 56 { castle_rights &= !(CASTLE_BLACK_QUEEN_SIDE) }
+            if self.from == 63 { castle_rights &= !(CASTLE_BLACK_KING_SIDE) }
         }
 
         if self.en_passant != 0 {
@@ -127,7 +146,7 @@ impl Move {
         // board.print_board();
         // println!("Move made");
 
-        if piece_type == 'p' {
+        (if piece_type == 'p' {
             if self.from / 8 == 6 && self.to / 8 == 4 {
                 self.from - 8
             } else {
@@ -141,7 +160,7 @@ impl Move {
             }
         } else {
             65
-        }
+        }, castle_rights)
     }
 
     pub fn unmake_move(&self, board: &mut Board) {
@@ -150,7 +169,7 @@ impl Move {
         // println!("Unmaking move");
         // board.print_board();
 
-        if self.is_castle() {
+        if (piece_type == 'k' || piece_type == 'K') && self.is_castle() {
             let (rook_pos, rook_n_pos, color) = self.get_castle_rook_pos();
 
             board.bitboards[ROOK] |= 1u64 << rook_pos; // Set the rook
@@ -494,7 +513,6 @@ pub fn get_moves(board: &Board, en_passant: u64, castle_rights: u32, white: bool
                         //     moves.push(n_move);
                         // }
                     }
-                    break;
                 } else {
                     moves.push(Move {
                         from: square,
@@ -509,29 +527,31 @@ pub fn get_moves(board: &Board, en_passant: u64, castle_rights: u32, white: bool
         }
     }
 
-    fn check_castling(castle_rights: u32, pieces: u64, side: u32, king_square: i32, direction: i32, attacks: u64) -> bool {
+    fn check_castling(board: &Board, castle_rights: u32, pieces: u64, side: u32, king_square: i32, direction: i32, attacks: u64) -> bool {
+        let rook_square = if side == CASTLE_WHITE_KING_SIDE {
+            7
+        } else if side == CASTLE_WHITE_QUEEN_SIDE {
+            0
+        } else if side == CASTLE_BLACK_QUEEN_SIDE {
+            56
+        } else { 63 };
+
         ((castle_rights & side) != 0) &&
+            ((board.bitboards[5] & (1u64 << king_square)) != 0) && // Ensure king is on it's starting square
+            ((board.bitboards[3] & (1u64 << rook_square)) != 0) && // Ensure king is on it's starting square
             ((pieces & (1u64 << (king_square + direction))) == 0) && // No pieces in between
             ((pieces & (1u64 << (king_square + direction * 2))) == 0) &&
+            // make sure QueenSide castling is possible
+            (if rook_square == 0 || rook_square == 56 { pieces & (1u64 << (king_square + direction * 3)) == 0 } else { true }) &&
             ((attacks & (1u64 << king_square)) == 0) && // No checks in between
             ((attacks & (1u64 << (king_square + direction))) == 0) &&
-            ((attacks & (1u64 << (king_square + direction * 2))) == 0)
+            ((attacks & (1u64 << (king_square + direction * 2))) == 0) &&
+            (board.bitboards[3] & (1u64 << rook_square)) != 0 // Ensure rook is available to castle with
     }
 
     // Castling
     if white {
-        if check_castling(castle_rights, board.all_pieces(), CASTLE_WHITE_KING_SIDE,
-                          WHITE_KING_SQUARE as i32, -1, att_board.black_attacks) {
-            moves.push(Move {
-                from: WHITE_KING_SQUARE,
-                to: WHITE_KING_SQUARE - 2,
-                promotion_type: 'z',
-                en_passant: 0,
-                capture: 'z',
-                castle_rights,
-            });
-        }
-        if check_castling(castle_rights, board.all_pieces(), CASTLE_WHITE_QUEEN_SIDE,
+        if check_castling(board, castle_rights, board.all_pieces(), CASTLE_WHITE_KING_SIDE,
                           WHITE_KING_SQUARE as i32, 1, att_board.black_attacks) {
             moves.push(Move {
                 from: WHITE_KING_SQUARE,
@@ -542,24 +562,35 @@ pub fn get_moves(board: &Board, en_passant: u64, castle_rights: u32, white: bool
                 castle_rights,
             });
         }
-    }
-    if !white {
-        if check_castling(castle_rights, board.all_pieces(), CASTLE_BLACK_KING_SIDE,
-                          BLACK_KING_SQUARE as i32, -1, att_board.white_attacks) {
+        if check_castling(board, castle_rights, board.all_pieces(), CASTLE_WHITE_QUEEN_SIDE,
+                          WHITE_KING_SQUARE as i32, -1, att_board.black_attacks) {
             moves.push(Move {
-                from: BLACK_KING_SQUARE,
-                to: BLACK_KING_SQUARE - 2,
+                from: WHITE_KING_SQUARE,
+                to: WHITE_KING_SQUARE - 2,
                 promotion_type: 'z',
                 en_passant: 0,
                 capture: 'z',
                 castle_rights,
             });
         }
-        if check_castling(castle_rights, board.all_pieces(), CASTLE_BLACK_QUEEN_SIDE,
+    }
+    if !white {
+        if check_castling(board, castle_rights, board.all_pieces(), CASTLE_BLACK_KING_SIDE,
                           BLACK_KING_SQUARE as i32, 1, att_board.white_attacks) {
             moves.push(Move {
                 from: BLACK_KING_SQUARE,
                 to: BLACK_KING_SQUARE + 2,
+                promotion_type: 'z',
+                en_passant: 0,
+                capture: 'z',
+                castle_rights,
+            });
+        }
+        if check_castling(board, castle_rights, board.all_pieces(), CASTLE_BLACK_QUEEN_SIDE,
+                          BLACK_KING_SQUARE as i32, -1, att_board.white_attacks) {
+            moves.push(Move {
+                from: BLACK_KING_SQUARE,
+                to: BLACK_KING_SQUARE - 2,
                 promotion_type: 'z',
                 en_passant: 0,
                 capture: 'z',
@@ -935,7 +966,7 @@ fn get_pawn_moves(board: GeneratorBoard, square: u64, en_passant: u64) -> u64 {
                 (1u64 << (square + 9)) & (board.black_pieces() | en_passant)
             } else { 0 }
         } else if square % 8 < 7 {
-            (1u64 << (square - 9)) & (board.white_pieces() | en_passant)
+            (1u64 << (square - 7)) & (board.white_pieces() | en_passant)
         } else { 0 }
     }
 
@@ -945,7 +976,7 @@ fn get_pawn_moves(board: GeneratorBoard, square: u64, en_passant: u64) -> u64 {
                 (1u64 << (square + 7)) & (board.black_pieces() | en_passant)
             } else { 0 }
         } else if square % 8 > 0 {
-            (1u64 << (square - 7)) & (board.white_pieces() | en_passant)
+            (1u64 << (square - 9)) & (board.white_pieces() | en_passant)
         } else { 0 }
     }
 
@@ -976,11 +1007,11 @@ fn get_pawn_moves(board: GeneratorBoard, square: u64, en_passant: u64) -> u64 {
 
     if is_king_top_left(&board, square, white) {
         if piece_on_bottom_right(&board, square, target_bishop) {
-            left_attacks(board.board, square, passant_square)
+            right_attacks(board.board, square, passant_square)
         } else { all_pawn_moves(board, square, passant_square) }
     } else if is_king_top_right(&board, square, white) {
         if piece_on_bottom_left(&board, square, target_bishop) {
-            right_attacks(board.board, square, passant_square)
+            left_attacks(board.board, square, passant_square)
         } else {
             all_pawn_moves(board, square, passant_square)
         }
