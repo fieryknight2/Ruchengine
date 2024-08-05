@@ -482,11 +482,10 @@ pub fn get_moves(board: &Board, en_passant: u64, castle_rights: u32, white: bool
     }
 
     // Normal moves
-    let king_type = if white { 'K' } else { 'k' };
     for square in 0..64 {
         if my_pieces & (1u64 << square) == 0 { continue; }
         let possible_moves = get_piece_moves_wa(&att_board, square, en_passant) &
-            (if find_piece_type(board, square) != king_type { possible_squares } else { !0u64 });
+            (if ((1u64 << square) & board.bitboards[5]) == 0 { possible_squares } else { !0u64 });
 
         if possible_moves == 0 { continue; } // No moves, no reason to loop through them
         for pm_square in 0..64 {
