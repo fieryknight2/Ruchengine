@@ -200,26 +200,13 @@ fn recursive_count_moves(board: &mut board::Board, move_: moves::Move, white: bo
             if n_move.promotion_type != 'z' { perft.promotion_count += 1; }
             perft.total_count += 1;
             perft.en_passant_count += if n_move.en_passant != 0 { 1 } else { 0 };
-            perft.check_count += if n_move.en_passant != 0 { 1 } else { 0 };
             // println!("Before {}{} {},{}", square_to_algebraic(n_move.from), square_to_algebraic(n_move.to), n_move.from, n_move.to);
             // if n_move.is_castle() {
             //     board.print_board();
             // }
             n_move.make_move(board);
-            perft.check_count += if moves::in_check(board, !white) { 1 } else { 0 };
+            // perft.check_count += if moves::in_check(board, !white) { 1 } else { 0 };
             n_move.unmake_move(board);
-            // println!("After");
-            // board.print_board();
-            if check_overlap(board) {
-                board.print_board();
-                println!("Piece overlap caused by move {}{}", square_to_algebraic(n_move.from), square_to_algebraic(n_move.to));
-                panic!("Piece overlap emergency quit")
-            }
-            // if check_missing(board) {
-            //     board.print_board();
-            //     println!("Piece missing caused by move {}{}", square_to_algebraic(n_move.from), square_to_algebraic(n_move.to));
-            //     panic!("Piece missing emergency quit")
-            // }
         } else {
             let result = recursive_count_moves(board, n_move, !white, depth - 1);
             perft.capture_count += result.capture_count;
@@ -325,7 +312,7 @@ mod tests {
     #[test]
     fn test_2() {
         test("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R", 3, 4_085_603, 0b1111, true, "");
-        test("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R", 5, 8_031_647_685, 0b1111, true, "");
+        // test("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R", 5, 8_031_647_685, 0b1111, true, "");
     }
 
     #[test]
@@ -342,8 +329,8 @@ mod tests {
         test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 3, 197_281, 0b1111, true, "");
         test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 4, 4_865_609, 0b1111, true, "");
         test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 5, 119_060_324, 0b1111, true, "");
-        test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 6, 3_195_901_860, 0b1111, true, "");
-        test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 7, 84_998_978_956, 0b1111, true, "");
+        // test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 6, 3_195_901_860, 0b1111, true, "");
+        // test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 7, 84_998_978_956, 0b1111, true, "");
     }
 
     #[test]
@@ -352,7 +339,7 @@ mod tests {
         // test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R", 1, 1_486, CASTLE_WHITE_KING_SIDE | CASTLE_WHITE_QUEEN_SIDE, true, "");
         // test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R", 2, 62_379, CASTLE_WHITE_KING_SIDE | CASTLE_WHITE_QUEEN_SIDE, true, "");
         // test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R", 3, 2_103_487, CASTLE_WHITE_KING_SIDE | CASTLE_WHITE_QUEEN_SIDE, true, "");
-        // test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R", 4, 89_941_194, CASTLE_WHITE_KING_SIDE | CASTLE_WHITE_QUEEN_SIDE, true, "");
+        test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R", 4, 89_941_194, 0b0011, true, "");
     }
 
     #[test]

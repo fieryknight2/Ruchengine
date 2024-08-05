@@ -269,8 +269,10 @@ fn get_attacks(board: &Board) -> GeneratorBoard {
         white_king: 0,
         black_king: 0,
     };
+    let all_pieces = board.all_pieces();
 
     for square in 0..64 {
+        if all_pieces & (1u64 << square) == 0 { continue; }
         for piece in 0..6 {
             if board.bitboards[piece] & (1u64 << square) != 0 {
                 let val = match piece {
@@ -410,8 +412,8 @@ fn count_check(board: &GeneratorBoard, white: bool, en_passant: u64) -> (bool, u
 pub fn in_check(board: &Board, white: bool) -> bool {
     let king = if white { find_king(board, true) } else { find_king(board, false) };
     for square in 0..64 {
+        if board.bitboards[if white { 6 } else { 7 }] & (1u64 << square) != 0 { continue; }
         for piece in 0..6 {
-            if board.bitboards[if white { 6 } else { 7 }] & (1u64 << square) != 0 { continue; }
             if (board.bitboards[piece] & (1u64 << square)) != 0 &&
                 ((1u64 << king) & match piece {
                     0 => get_pawn_attacks(board, square),
@@ -927,12 +929,12 @@ fn all_rook_moves(board: GeneratorBoard, square: u64) -> u64 {
     left_right(board.board, square) | top_bottom(board.board, square)
 }
 
-fn check_en_passant(board: &Board, square: u64, en_passant: u64) -> u64 {
+fn check_en_passant(board: &GeneratorBoard, square: u64, en_passant: u64) -> u64 {
     if en_passant > 63 || en_passant == 0 {
         return 0;
     }
-    let mut board_cp: Board = board.clone();
-    let white = board.white_pieces() & (1u64 << square) != 0;
+    let mut board_cp: Board = board.board.clone();
+    let white = board.board.white_pieces() & (1u64 << square) != 0;
 
     let clear = !(1u64 << (en_passant as i32 + if white { -8 } else { 8 }));
     board_cp.bitboards[if white { 7 } else { 6 }] &= clear; // clear the taken pawn
@@ -944,12 +946,21 @@ fn check_en_passant(board: &Board, square: u64, en_passant: u64) -> u64 {
     board_cp.bitboards[if white { 6 } else { 7 }] &= !(1u64 << square); // clear the old square
     board_cp.bitboards[0] &= !(1u64 << square);
 
-    if in_check(&board_cp, white) {
-        // println!("In check");
-        0
-    } else {
-        1u64 << en_passant
+    for square in 0..64 {
+        for piece in 2..5 {
+            if board_cp.bitboards[if white { 6 } else { 7 }] & (1u64 << square) != 0 { continue; }
+            if (board_cp.bitboards[piece] & (1u64 << square)) != 0 &&
+                ((1u64 << (if white { board.white_king } else { board.black_king })) & match piece {
+                    2 => get_bishop_attacks(board_cp.all_pieces(), square),
+                    3 => get_rook_attacks(board_cp.all_pieces(), square),
+                    4 => get_queen_attacks(board_cp.all_pieces(), square),
+                    _ => { unreachable!("Invalid board"); }
+                }) != 0 {
+                return 0;
+            }
+        }
     }
+    1u64 << en_passant
 }
 
 fn get_pawn_moves(board: GeneratorBoard, square: u64, en_passant: u64) -> u64 {
@@ -958,7 +969,9 @@ fn get_pawn_moves(board: GeneratorBoard, square: u64, en_passant: u64) -> u64 {
     let target_bishop = (board.board.bitboards[BISHOP] | board.board.bitboards[QUEEN]) & target_pieces;
     let target_rook = (board.board.bitboards[ROOK] | board.board.bitboards[QUEEN]) & target_pieces;
 
-    let passant_square = if square > 15 && square < 48 { check_en_passant(board.board, square, en_passant) } else { 0 };
+    let passant_square = if square > 15 && square < 48 {
+        check_en_passant(&board, square, en_passant)
+    } else { 0 };
 
     fn right_attacks(board: &Board, square: u64, en_passant: u64) -> u64 {
         if board.white_pieces() & (1u64 << square) != 0 {
@@ -1170,28 +1183,34 @@ fn get_queen_moves(board: GeneratorBoard, square: u64) -> u64 {
 
 fn get_king_moves(board: GeneratorBoard, square: u64) -> u64 {
     let white = board.board.white_pieces() & (1u64 << square) != 0;
-    let my_pieces = if white { board.board.white_pieces() } else { board.board.black_pieces() };
-    let pieces = board.board.all_pieces() & (!(board.board.bitboards[5] & my_pieces));
-    let mut attacks = 0;
-    for square in 0..64 {
-        for piece in 0..6 {
-            if board.board.bitboards[piece] & (1u64 << square) != 0 &&
-                board.board.bitboards[if white { 7 } else { 6 }] & (1u64 << square) != 0 {
-                let val = match piece {
-                    0 => get_pawn_attacks(board.board, square),
-                    1 => get_knight_attacks(square),
-                    2 => get_bishop_attacks(pieces, square),
-                    3 => get_rook_attacks(pieces, square),
-                    4 => get_queen_attacks(pieces, square),
-                    5 => get_king_attacks(square),
-                    _ => { unreachable!("Invalid board"); }
-                };
+    let target_pieces = if white { board.board.black_pieces() } else { board.board.white_pieces() };
+    let target_bishop = (board.board.bitboards[BISHOP] | board.board.bitboards[QUEEN]) & target_pieces;
+    let target_rook = (board.board.bitboards[ROOK] | board.board.bitboards[QUEEN]) & target_pieces;
+    let mut attacks = if white { board.black_attacks } else { board.white_attacks };
 
-                attacks |= val;
-
-                break; // Piece found, no need to check other types
-            }
-        }
+    if piece_on_top_left(&board, square, target_bishop) {
+        attacks |= if square > 6 { 1u64 << (square - 7) } else { 0 }; // Bottom Right
+    }
+    if piece_on_top_right(&board, square, target_bishop) {
+        attacks |= if square > 8 { 1u64 << (square - 9) } else { 0 }; // Bottom Left
+    }
+    if piece_on_bottom_left(&board, square, target_bishop) {
+        attacks |= if square < 55 { 1u64 << (square + 9) } else { 0 }; // Top Right
+    }
+    if piece_on_bottom_right(&board, square, target_bishop) {
+        attacks |= if square < 57 { 1u64 << (square + 7) } else { 0 }; // Top Left
+    }
+    if piece_on_left(&board, square, target_rook) {
+        attacks |= if square > 0 { 1u64 << (square - 1) } else { 0 }; // Right
+    }
+    if piece_on_right(&board, square, target_rook) {
+        attacks |= if square < 63 { 1u64 << (square + 1) } else { 0 }; // Left
+    }
+    if piece_on_top(&board, square, target_rook) {
+        attacks |= if square > 7 { 1u64 << (square - 8) } else { 0 }; // Bottom
+    }
+    if piece_on_bottom(&board, square, target_rook) {
+        attacks |= if square < 56 { 1u64 << (square + 8) } else { 0 }; // Top
     }
 
     get_king_attacks(square) & (!if white { board.board.white_pieces() } else { board.board.black_pieces() }) & (!attacks)
