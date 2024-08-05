@@ -32,11 +32,12 @@ pub fn count_moves(board: &mut board::Board, castle_rights: u32, white: bool, mu
 
     let move_list = moves::get_moves(board, en_passant, castle_rights, white);
     let mut handles: Vec<thread::JoinHandle<()>> = Vec::new();
-    let (tx, rx) = mpsc::channel();
+    let mut recievers = Vec::new();
     if depth != 0 {
         for move_ in move_list {
             let mut board = board.clone();
-            let tx = tx.clone();
+            let (tx, rx) = mpsc::channel();
+            recievers.push(rx);
             handles.push(thread::spawn(move || {
                 let mut perft = PerftStats {
                     capture_count: 0,
@@ -62,8 +63,8 @@ pub fn count_moves(board: &mut board::Board, castle_rights: u32, white: bool, mu
             }));
         }
 
-        for handle in handles {
-            let val = rx.recv().unwrap();
+        for (index, handle) in handles.into_iter().enumerate() {
+            let val = recievers[index].recv().unwrap();
             perft.capture_count += val.capture_count;
             perft.promotion_count += val.promotion_count;
             perft.check_count += val.check_count;
