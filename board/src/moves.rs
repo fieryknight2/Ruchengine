@@ -326,10 +326,8 @@ fn get_piece_moves_wa(attacks: &GeneratorBoard, square: u64, en_passant: u64) ->
 }
 
 pub fn find_piece_type(board: &Board, square: u64) -> char {
-    for (piece, bitboard) in board.bitboards.iter().enumerate() {
-        if piece == 6 || piece == 7 { continue; }
-
-        if bitboard & (1u64 << square) != 0 {
+    for piece in 0..6 {
+        if board.bitboards[piece] & (1u64 << square) != 0 {
             return if board.white_pieces() & (1u64 << square) != 0 {
                 match piece {
                     0 => 'P',
