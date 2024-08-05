@@ -548,53 +548,55 @@ pub fn get_moves(board: &Board, en_passant: u64, castle_rights: u32, white: bool
             (board.bitboards[3] & (1u64 << rook_square)) != 0 // Ensure rook is available to castle with
     }
 
-    // Castling
-    if white {
-        if check_castling(board, castle_rights, board.all_pieces(), CASTLE_WHITE_KING_SIDE,
-                          WHITE_KING_SQUARE as i32, 1, att_board.black_attacks) {
-            moves.push(Move {
-                from: WHITE_KING_SQUARE,
-                to: WHITE_KING_SQUARE + 2,
-                promotion_type: 'z',
-                en_passant: 0,
-                capture: 'z',
-                castle_rights,
-            });
+    if castle_rights != 0 {
+        // Castling
+        if white {
+            if check_castling(board, castle_rights, board.all_pieces(), CASTLE_WHITE_KING_SIDE,
+                              WHITE_KING_SQUARE as i32, 1, att_board.black_attacks) {
+                moves.push(Move {
+                    from: WHITE_KING_SQUARE,
+                    to: WHITE_KING_SQUARE + 2,
+                    promotion_type: 'z',
+                    en_passant: 0,
+                    capture: 'z',
+                    castle_rights,
+                });
+            }
+            if check_castling(board, castle_rights, board.all_pieces(), CASTLE_WHITE_QUEEN_SIDE,
+                              WHITE_KING_SQUARE as i32, -1, att_board.black_attacks) {
+                moves.push(Move {
+                    from: WHITE_KING_SQUARE,
+                    to: WHITE_KING_SQUARE - 2,
+                    promotion_type: 'z',
+                    en_passant: 0,
+                    capture: 'z',
+                    castle_rights,
+                });
+            }
         }
-        if check_castling(board, castle_rights, board.all_pieces(), CASTLE_WHITE_QUEEN_SIDE,
-                          WHITE_KING_SQUARE as i32, -1, att_board.black_attacks) {
-            moves.push(Move {
-                from: WHITE_KING_SQUARE,
-                to: WHITE_KING_SQUARE - 2,
-                promotion_type: 'z',
-                en_passant: 0,
-                capture: 'z',
-                castle_rights,
-            });
-        }
-    }
-    if !white {
-        if check_castling(board, castle_rights, board.all_pieces(), CASTLE_BLACK_KING_SIDE,
-                          BLACK_KING_SQUARE as i32, 1, att_board.white_attacks) {
-            moves.push(Move {
-                from: BLACK_KING_SQUARE,
-                to: BLACK_KING_SQUARE + 2,
-                promotion_type: 'z',
-                en_passant: 0,
-                capture: 'z',
-                castle_rights,
-            });
-        }
-        if check_castling(board, castle_rights, board.all_pieces(), CASTLE_BLACK_QUEEN_SIDE,
-                          BLACK_KING_SQUARE as i32, -1, att_board.white_attacks) {
-            moves.push(Move {
-                from: BLACK_KING_SQUARE,
-                to: BLACK_KING_SQUARE - 2,
-                promotion_type: 'z',
-                en_passant: 0,
-                capture: 'z',
-                castle_rights,
-            });
+        if !white {
+            if check_castling(board, castle_rights, board.all_pieces(), CASTLE_BLACK_KING_SIDE,
+                              BLACK_KING_SQUARE as i32, 1, att_board.white_attacks) {
+                moves.push(Move {
+                    from: BLACK_KING_SQUARE,
+                    to: BLACK_KING_SQUARE + 2,
+                    promotion_type: 'z',
+                    en_passant: 0,
+                    capture: 'z',
+                    castle_rights,
+                });
+            }
+            if check_castling(board, castle_rights, board.all_pieces(), CASTLE_BLACK_QUEEN_SIDE,
+                              BLACK_KING_SQUARE as i32, -1, att_board.white_attacks) {
+                moves.push(Move {
+                    from: BLACK_KING_SQUARE,
+                    to: BLACK_KING_SQUARE - 2,
+                    promotion_type: 'z',
+                    en_passant: 0,
+                    capture: 'z',
+                    castle_rights,
+                });
+            }
         }
     }
 
