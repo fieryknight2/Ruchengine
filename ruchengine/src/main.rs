@@ -5,23 +5,19 @@ use board::count_moves_no_threads;
 
 fn test(string: &str, depth: u32, expected: u64, castle_rights: u32, white: bool, en_passant: &str) {
     let mut board = board::board::create_board_from_string(string);
-    let perft = count_moves(&mut board, castle_rights, white, if en_passant.len() == 2 { board::board::square_from_algebraic(en_passant) } else { 0 }, depth);
-    println!("Promotion Count: {}, Capture Count: {}, Check Count: {}, Castle Count {}, En Passant Count {}",
-             perft.promotion_count, perft.capture_count, perft.check_count, perft.castle_count, perft.en_passant_count);
-    println!("Total Count: {}", perft.total_count);
+    let perft = count_moves(&mut board, castle_rights, white, if en_passant.len() == 2 { square_from_algebraic(en_passant) } else { 0 }, depth);
+    println!("Total Count: {}", perft);
     if expected != 0 {
-        assert_eq!(perft.total_count, expected);
+        assert_eq!(perft, expected);
     }
 }
 
 fn test_no_thread(string: &str, depth: u32, expected: u64, castle_rights: u32, white: bool, en_passant: &str) {
     let mut board = board::board::create_board_from_string(string);
-    let perft = count_moves_no_threads(&mut board, castle_rights, white, if en_passant.len() == 2 { board::board::square_from_algebraic(en_passant) } else { 0 }, depth);
-    println!("Promotion Count: {}, Capture Count: {}, Check Count: {}, Castle Count {}, En Passant Count {}",
-             perft.promotion_count, perft.capture_count, perft.check_count, perft.castle_count, perft.en_passant_count);
-    println!("Total Count: {}", perft.total_count);
+    let perft = count_moves_no_threads(&mut board, castle_rights, white, if en_passant.len() == 2 { square_from_algebraic(en_passant) } else { 0 }, depth);
+    println!("Total Count: {}", perft);
     if expected != 0 {
-        assert_eq!(perft.total_count, expected);
+        assert_eq!(perft, expected);
     }
 }
 
@@ -59,6 +55,7 @@ fn main() {
     //     println!("{} to {} capture {}", square_to_algebraic(move_.from),
     //              square_to_algebraic(move_.to), move_.capture);
     // }
+
     let start_time = Instant::now();
     test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R", 4, 89_941_194, 0b0011, true, "");
     println!("Time elapsed: {:?}", start_time.elapsed());
@@ -71,9 +68,9 @@ fn main() {
     test("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R", 5, 8_031_647_685, 0b1111, true, "");
     println!("Time elapsed: {:?}", start_time.elapsed());
 
-    let start_time = Instant::now();
-    test_no_thread("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R", 5, 8_031_647_685, 0b1111, true, "");
-    println!("Time elapsed: {:?}", start_time.elapsed());
+    // let start_time = Instant::now();
+    // test_no_thread("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R", 5, 8_031_647_685, 0b1111, true, "");
+    // println!("Time elapsed: {:?}", start_time.elapsed());
 
     let start_time = Instant::now();
     test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 0, 20, 0b1111, true, "");
