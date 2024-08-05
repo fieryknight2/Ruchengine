@@ -358,9 +358,9 @@ fn count_check(board: &GeneratorBoard, white: bool, en_passant: u64) -> (bool, u
     let mut possible_blocks: u64 = 0;
     let mut count: u64 = 0;
     for square in 0..64 {
+        if (if white { board.board.black_pieces() } else { board.board.white_pieces() } & (1u64 << square)) == 0 { continue; }
         for piece in 0..6 {
-            if (if white { board.board.black_pieces() } else { board.board.white_pieces() } & (1u64 << square)) != 0 &&
-                board.board.bitboards[piece] & (1u64 << square) != 0 {
+            if board.board.bitboards[piece] & (1u64 << square) != 0 {
                 let val = match piece {
                     0 => get_pawn_attacks(board.board, square),
                     1 => get_knight_attacks(square),
