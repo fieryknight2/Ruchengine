@@ -1,9 +1,3 @@
-//   PawnLocation = 0,
-//   KnightLocation = 1,
-//   BishopLocation = 2,
-//   RookLocation = 3,
-//   QueenLocation = 4,
-//   KingLocation = 5,
 const WHITE_PIECES: usize = 6;
 const BLACK_PIECES: usize = 7;
 
@@ -14,14 +8,17 @@ pub const ROOK: usize = 3;
 pub const QUEEN: usize = 4;
 pub const KING: usize = 5;
 
+#[derive(Clone)]
 pub struct Board {
     pub bitboards: [u64; 8],
 }
 
 pub fn print_bitboard(bitboard: u64, on: char, off: char) {
+    println!("  A B C D E F G H");
     for r in 0..8 {
+        print!("{} ", 8 - r);
         for c in 0..8 {
-            if (bitboard & (1u64 << (r * 8 + (7 - c)))) != 0 {
+            if (bitboard & (1u64 << ((7 - r) * 8 + c))) != 0 {
                 print!("{} ", on);
             } else {
                 print!("{} ", off);
@@ -59,7 +56,7 @@ pub fn square_from_algebraic(sqr: &str) -> u64 {
             '6' => rank = 5,
             '7' => rank = 6,
             '8' => rank = 7,
-            _ => { assert!(false, "Invalid square"); }
+            _ => { panic!("Invalid square"); }
         }
     }
 
@@ -67,7 +64,7 @@ pub fn square_from_algebraic(sqr: &str) -> u64 {
 }
 
 pub fn square_to_algebraic(square: u64) -> String {
-    assert!(0 < square && square < 64, "Invalid square");
+    assert!(square <= 64, "Invalid square");
 
     format!("{}{}", match square % 8 { // square % 8 is the file
         0 => 'a',
@@ -78,10 +75,7 @@ pub fn square_to_algebraic(square: u64) -> String {
         5 => 'f',
         6 => 'g',
         7 => 'h',
-        _ => {
-            assert!(false, "Invalid square");
-            'z'
-        }
+        _ => { unreachable!("Invalid square"); }
     }, square / 8 + 1) // square / 8 is the rank
 }
 
@@ -176,3 +170,4 @@ impl Board {
         }
     }
 }
+
