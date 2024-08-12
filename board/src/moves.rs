@@ -259,7 +259,7 @@ fn get_bitboard_val(piece_type: char) -> usize {
     }
 }
 
-fn find_king(board: &Board, white: bool) -> u64 {
+pub fn find_king(board: &Board, white: bool) -> u64 {
     let mut index = 0;
     for square in 0..64 {
         if board.bitboards[5] & (1u64 << square) != 0 {
@@ -277,7 +277,44 @@ fn find_king(board: &Board, white: bool) -> u64 {
     index
 }
 
-fn get_attacks(board: &Board) -> GeneratorBoard {
+fn get_piece_attacks(board: &Board, piece: usize, square: u64) -> u64 {
+    match piece {
+        0 => get_pawn_attacks(board, square),
+        1 => get_knight_attacks(square),
+        2 => get_bishop_attacks(board.all_pieces(), square),
+        3 => get_rook_attacks(board.all_pieces(), square),
+        4 => get_queen_attacks(board.all_pieces(), square),
+        5 => get_king_attacks(square),
+        _ => {
+            unreachable!("Invalid board");
+        }
+    }
+}
+
+
+pub fn get_attacks(board: &Board, white: bool) -> u64 {
+    let mut att_board = 0;
+    let pieces = if white { board.white_pieces() } else { board.black_pieces() };
+
+    for square in 0..64 {
+        if pieces & (1u64 << square) == 0 {
+            continue;
+        }
+        for piece in 0..6 {
+            if board.bitboards[piece] & (1u64 << square) != 0 {
+                let val = get_piece_attacks(board, piece, square);
+
+                att_board |= val;
+
+                break; // Piece found, no need to check other types
+            }
+        }
+    }
+
+    att_board
+}
+
+fn create_generator_board(board: &Board) -> GeneratorBoard {
     let mut att_board = GeneratorBoard {
         board,
         white_attacks: 0,
@@ -293,17 +330,7 @@ fn get_attacks(board: &Board) -> GeneratorBoard {
         }
         for piece in 0..6 {
             if board.bitboards[piece] & (1u64 << square) != 0 {
-                let val = match piece {
-                    0 => get_pawn_attacks(board, square),
-                    1 => get_knight_attacks(square),
-                    2 => get_bishop_attacks(board.all_pieces(), square),
-                    3 => get_rook_attacks(board.all_pieces(), square),
-                    4 => get_queen_attacks(board.all_pieces(), square),
-                    5 => get_king_attacks(square),
-                    _ => {
-                        unreachable!("Invalid board");
-                    }
-                };
+                let val = get_piece_attacks(board, piece, square);
 
                 if board.white_pieces() & (1u64 << square) != 0 {
                     att_board.white_attacks |= val;
@@ -320,7 +347,7 @@ fn get_attacks(board: &Board) -> GeneratorBoard {
 }
 
 pub fn get_piece_moves(board: &Board, square: u64, en_passant: u64) -> u64 {
-    get_piece_moves_wa(&get_attacks(board), square, en_passant)
+    get_piece_moves_wa(&create_generator_board(board), square, en_passant)
 }
 
 fn get_piece_moves_wa(attacks: &GeneratorBoard, square: u64, en_passant: u64) -> u64 {
@@ -414,10 +441,10 @@ fn count_check(board: &GeneratorBoard, white: bool, en_passant: u64) -> (bool, u
 
                 if ((1u64
                     << if white {
-                        board.white_king
-                    } else {
-                        board.black_king
-                    })
+                    board.white_king
+                } else {
+                    board.black_king
+                })
                     & val)
                     != 0
                 {
@@ -495,18 +522,8 @@ pub fn in_check(board: &Board, white: bool) -> bool {
         for piece in 0..6 {
             if (board.bitboards[piece] & (1u64 << square)) != 0
                 && ((1u64 << king)
-                    & match piece {
-                        0 => get_pawn_attacks(board, square),
-                        1 => get_knight_attacks(square),
-                        2 => get_bishop_attacks(board.all_pieces(), square),
-                        3 => get_rook_attacks(board.all_pieces(), square),
-                        4 => get_queen_attacks(board.all_pieces(), square),
-                        5 => get_king_attacks(square),
-                        _ => {
-                            unreachable!("Invalid board");
-                        }
-                    })
-                    != 0
+                & get_piece_attacks(board, piece, square))
+                != 0
             {
                 return true;
             }
@@ -527,7 +544,7 @@ pub fn in_check(board: &Board, white: bool) -> bool {
 pub fn get_moves(board: &Board, en_passant: u64, castle_rights: u32, white: bool) -> Vec<Move> {
     let mut moves: Vec<Move> = Vec::new();
 
-    let mut att_board = get_attacks(board);
+    let mut att_board = create_generator_board(board);
     att_board.white_king = find_king(board, true);
     att_board.black_king = find_king(board, false);
 
@@ -587,10 +604,10 @@ pub fn get_moves(board: &Board, en_passant: u64, castle_rights: u32, white: bool
         }
         let possible_moves = get_piece_moves_wa(&att_board, square, en_passant)
             & (if ((1u64 << square) & board.bitboards[5]) == 0 {
-                possible_squares
-            } else {
-                !0u64
-            });
+            possible_squares
+        } else {
+            !0u64
+        });
 
         if possible_moves == 0 {
             continue;
@@ -750,7 +767,7 @@ pub fn get_moves(board: &Board, en_passant: u64, castle_rights: u32, white: bool
     moves
 }
 
-fn is_en_passant(board: &Board, from: u64, to: u64) -> i32 {
+pub fn is_en_passant(board: &Board, from: u64, to: u64) -> i32 {
     let piece_type = find_piece_type(board, from);
     if piece_type == 'p' {
         if from / 8 == 3 && to / 8 == 2 {
@@ -1197,20 +1214,20 @@ fn check_en_passant(board: &GeneratorBoard, square: u64, en_passant: u64) -> u64
             }
             if (board_cp.bitboards[piece] & (1u64 << square)) != 0
                 && ((1u64
-                    << (if white {
-                        board.white_king
-                    } else {
-                        board.black_king
-                    }))
-                    & match piece {
-                        2 => get_bishop_attacks(board_cp.all_pieces(), square),
-                        3 => get_rook_attacks(board_cp.all_pieces(), square),
-                        4 => get_queen_attacks(board_cp.all_pieces(), square),
-                        _ => {
-                            unreachable!("Invalid board");
-                        }
-                    })
-                    != 0
+                << (if white {
+                board.white_king
+            } else {
+                board.black_king
+            }))
+                & match piece {
+                2 => get_bishop_attacks(board_cp.all_pieces(), square),
+                3 => get_rook_attacks(board_cp.all_pieces(), square),
+                4 => get_queen_attacks(board_cp.all_pieces(), square),
+                _ => {
+                    unreachable!("Invalid board");
+                }
+            })
+                != 0
             {
                 return 0;
             }
@@ -1346,18 +1363,18 @@ fn king_diag_pinned(board: &GeneratorBoard, square: u64) -> bool {
     let white = board.board.white_pieces() & (1u64 << square) != 0;
     let target_bishop = (board.board.bitboards[BISHOP] | board.board.bitboards[QUEEN])
         & (if white {
-            board.board.black_pieces()
-        } else {
-            board.board.white_pieces()
-        });
+        board.board.black_pieces()
+    } else {
+        board.board.white_pieces()
+    });
 
     (is_king_top_left(board, square, white) && piece_on_bottom_right(board, square, target_bishop))
         || (is_king_top_right(board, square, white)
-            && piece_on_bottom_left(board, square, target_bishop))
+        && piece_on_bottom_left(board, square, target_bishop))
         || (is_king_bottom_left(board, square, white)
-            && piece_on_top_right(board, square, target_bishop))
+        && piece_on_top_right(board, square, target_bishop))
         || (is_king_bottom_right(board, square, white)
-            && piece_on_top_left(board, square, target_bishop))
+        && piece_on_top_left(board, square, target_bishop))
 }
 
 //noinspection DuplicatedCode
@@ -1517,10 +1534,10 @@ fn get_king_moves(board: GeneratorBoard, square: u64) -> u64 {
 
     get_king_attacks(square)
         & (!if white {
-            board.board.white_pieces()
-        } else {
-            board.board.black_pieces()
-        })
+        board.board.white_pieces()
+    } else {
+        board.board.black_pieces()
+    })
         & (!attacks)
 }
 

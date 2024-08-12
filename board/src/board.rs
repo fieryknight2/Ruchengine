@@ -34,8 +34,14 @@ pub fn square_from_algebraic(sqr: &str) -> u64 {
     let mut rank: u64 = 0;
 
     assert_eq!(sqr.len(), 2, "Invalid algebraic square format");
-    assert!(sqr.chars().next().unwrap_or('z').is_alphabetic(), "Invalid algebraic square format");
-    assert!(sqr.chars().nth(1).unwrap_or('z').is_numeric(), "Invalid algebraic square format");
+    assert!(
+        sqr.chars().next().unwrap_or('z').is_alphabetic(),
+        "Invalid algebraic square format"
+    );
+    assert!(
+        sqr.chars().nth(1).unwrap_or('z').is_numeric(),
+        "Invalid algebraic square format"
+    );
 
     // Parse the square
     for c in sqr.chars() {
@@ -56,7 +62,9 @@ pub fn square_from_algebraic(sqr: &str) -> u64 {
             '6' => rank = 5,
             '7' => rank = 6,
             '8' => rank = 7,
-            _ => { panic!("Invalid square"); }
+            _ => {
+                panic!("Invalid square");
+            }
         }
     }
 
@@ -66,17 +74,24 @@ pub fn square_from_algebraic(sqr: &str) -> u64 {
 pub fn square_to_algebraic(square: u64) -> String {
     assert!(square <= 64, "Invalid square");
 
-    format!("{}{}", match square % 8 { // square % 8 is the file
-        0 => 'a',
-        1 => 'b',
-        2 => 'c',
-        3 => 'd',
-        4 => 'e',
-        5 => 'f',
-        6 => 'g',
-        7 => 'h',
-        _ => { unreachable!("Invalid square"); }
-    }, square / 8 + 1) // square / 8 is the rank
+    format!(
+        "{}{}",
+        match square % 8 {
+            // square % 8 is the file
+            0 => 'a',
+            1 => 'b',
+            2 => 'c',
+            3 => 'd',
+            4 => 'e',
+            5 => 'f',
+            6 => 'g',
+            7 => 'h',
+            _ => {
+                unreachable!("Invalid square");
+            }
+        },
+        square / 8 + 1
+    ) // square / 8 is the rank
 }
 
 pub fn create_board() -> Board {
@@ -114,9 +129,15 @@ pub fn create_board_from_string(string: &str) -> Board {
                 'r' | 'R' => 3,
                 'q' | 'Q' => 4,
                 'k' | 'K' => 5,
-                _ => { panic!("Invalid fen format"); }
+                _ => {
+                    panic!("Invalid fen format");
+                }
             }] |= 1u64 << square;
-            board.bitboards[if file.is_uppercase() { WHITE_PIECES } else { BLACK_PIECES }] |= 1u64 << square;
+            board.bitboards[if file.is_uppercase() {
+                WHITE_PIECES
+            } else {
+                BLACK_PIECES
+            }] |= 1u64 << square;
             current_file += 1;
         }
     }
@@ -146,7 +167,9 @@ impl Board {
         let mut board: [char; 64] = ['.'; 64];
         // Generate the visible board
         for (piece_type, bitboard) in self.bitboards.iter().enumerate() {
-            if piece_type == 6 || piece_type == 7 { continue; }
+            if piece_type == 6 || piece_type == 7 {
+                continue;
+            }
 
             for square in 0..64 {
                 if (bitboard & (1u64 << square)) != 0 {
@@ -170,4 +193,3 @@ impl Board {
         }
     }
 }
-
