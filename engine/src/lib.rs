@@ -122,12 +122,18 @@ pub fn get_best_move(board: &mut BoardState, depth: u32) -> Move {
 }
 
 pub fn get_best_moves(board: &mut BoardState, depth: u32) -> Vec<(Move, i32)> {
+    if depth == 0 { assert_ne!(depth, 0, "Depth can't be 0"); }
+
     let mut move_list = get_moves(&board.board, board.en_passant, board.castle_rights, board.white);
     order_moves(board, &mut move_list); // Order the moves to make alpha beta search faster
 
     let mut eval_list: Vec<(Move, i32)> = Vec::new();
     for move_ in move_list.iter_mut() {
-        move_.make_move(&mut board.board);
+        let (en_passant, castle_rights) = move_.make_move(&mut board.board);
+        board.en_passant = en_passant; // Change the new values for the next move
+        board.castle_rights = castle_rights;
+        board.white = !board.white;
+
         eval_list.push(
             if board.white {
                 (*move_, alpha_beta_max(board, depth - 1, -MASSIVE_NUMBER, MASSIVE_NUMBER))
@@ -135,11 +141,15 @@ pub fn get_best_moves(board: &mut BoardState, depth: u32) -> Vec<(Move, i32)> {
                 (*move_, alpha_beta_min(board, depth - 1, MASSIVE_NUMBER, -MASSIVE_NUMBER))
             }
         );
+
         move_.unmake_move(&mut board.board);
+        board.en_passant = move_.en_passant as u64; // Reset old values
+        board.castle_rights = move_.castle_rights;
+        board.white = !board.white;
     }
 
 
-    eval_list.sort_by(if board.white {
+    eval_list.sort_by(
         |a: &(Move, i32), b: &(Move, i32)| {
             if a.1 > b.1 {
                 std::cmp::Ordering::Greater
@@ -147,15 +157,7 @@ pub fn get_best_moves(board: &mut BoardState, depth: u32) -> Vec<(Move, i32)> {
                 std::cmp::Ordering::Less
             }
         }
-    } else {
-        |a: &(Move, i32), b: &(Move, i32)| {
-            if a.1 > b.1 {
-                std::cmp::Ordering::Less
-            } else {
-                std::cmp::Ordering::Greater
-            }
-        }
-    });
+    );
 
     eval_list
 }
