@@ -77,7 +77,7 @@ pub fn count_moves(
     } else {
         perft = move_list.len() as u64;
         for move_ in move_list {
-            print_move(move_); // print_divide(move_, 1);
+            print_divide(move_, 1); // print_move(move_); // print_divide(move_, 1);
         }
     }
 
@@ -300,5 +300,13 @@ mod tests {
         // test("8/2p5/3p4/KP5r/7k/5p2/4P1P1/6R1", 2, 4_546, 0, false, "");
         // test("8/2p5/3p4/KP5r/6k1/5p2/4P1P1/6R1", 1, 313, 0, true, "");
         // test("8/2p5/3p4/KP5r/6k1/5P2/4P3/6R1", 0, 4, 0, false, "");
+    }
+
+    #[test]
+    fn test_broken() {
+        test("2Q3nr/pp1pk3/7p/1q2B1p1/8/2P3P1/P1P3BP/1K1R4", 3, 53491, 0, true, "");
+        // test("2Q3nr/pp1pk3/7p/1q2B1p1/8/2P3P1/P1P3BP/K2R4", 2, 27113, 0, false, "");
+        // test("2Q3nr/pp1p4/4k2p/1q2B1p1/8/2P3P1/P1P3BP/K2R4", 1, 1094, 0, true, "");
+        // test("2Q3nr/pp1p4/2B1k2p/1q2B1p1/8/2P3P1/P1P4P/K2R4", 0, 29, 0, false, "");
     }
 }
