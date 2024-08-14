@@ -260,21 +260,18 @@ fn get_bitboard_val(piece_type: char) -> usize {
 }
 
 pub fn find_king(board: &Board, white: bool) -> u64 {
-    let mut index = 0;
     for square in 0..64 {
         if board.bitboards[5] & (1u64 << square) != 0 {
             if white && (board.white_pieces() & (1u64 << square)) != 0 {
-                index = square;
-                break;
+                return square;
             }
             if !white && (board.black_pieces() & (1u64 << square)) != 0 {
-                index = square;
-                break;
+                return square;
             }
         }
     }
 
-    index
+    panic!("No {} king found on board", if white { "white" } else { "black" });
 }
 
 fn get_piece_attacks(board: &Board, piece: usize, square: u64) -> u64 {

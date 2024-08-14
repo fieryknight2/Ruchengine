@@ -4,12 +4,12 @@ use std::time::Instant;
 use board::board::{create_default_board, print_bitboard, square_from_algebraic, square_to_algebraic};
 use board::{count_moves};
 use board::count_moves_no_threads;
-use board::moves::{find_piece_type, get_moves, is_en_passant, Move};
-use engine::evaluate::BoardState;
-use engine::get_best_move;
+use board::moves::{get_moves, in_check, Move};
+use engine::evaluate::{BoardState, evaluate};
+// use engine::get_best_move;
 use engine::get_best_moves;
 
-const DEPTH: u32 = 4;
+const DEPTH: u32 = 300;
 
 fn test(string: &str, depth: u32, expected: u64, castle_rights: u32, white: bool, en_passant: &str) {
     let mut board = board::board::create_board_from_string(string);
@@ -29,7 +29,7 @@ fn test_no_thread(string: &str, depth: u32, expected: u64, castle_rights: u32, w
     }
 }
 
-fn testing() {
+fn _testing() {
     println!("Hello, world!");
     println!("{}, {}", square_to_algebraic(4), square_to_algebraic(22));
     print_bitboard(1073741824, 'X', '.');
@@ -117,8 +117,22 @@ fn main() {
         full_move_count: 0,
     };
 
+    println!("Evaluation at base: {}", evaluate(&mut board));
+
     loop {
         board.board.print_board();
+
+        let possible_moves = get_moves(&board.board, board.en_passant, board.castle_rights, board.white);
+        if possible_moves.is_empty() {
+            println!("Game Over");
+            if in_check(&board.board, true) {
+                println!("Checkmate! You lose!");
+            } else {
+                println!("Stalemate! Draw!");
+            }
+            break;
+        }
+
         print!("Enter move (e.g. e2e4=z): ");
         io::stdout().flush().expect("TODO: panic message");
 
@@ -128,7 +142,6 @@ fn main() {
         if input == "quit" {
             break;
         }
-        let possible_moves = get_moves(&board.board, board.en_passant, board.castle_rights, board.white);
         if input == "moves" {
             for move_ in possible_moves {
                 println!("{}{}={}", square_to_algebraic(move_.from), square_to_algebraic(move_.to), move_.promotion_type);
@@ -179,11 +192,26 @@ fn main() {
 
         // Respond
         println!("Move made");
-        let best_move = get_best_move(&mut board, DEPTH);
+        let start_time = Instant::now();
+        let best_moves = get_best_moves(&mut board, DEPTH);
+        println!("Time elapsed: {:?}", start_time.elapsed());
+
+        if best_moves.is_empty() {
+            println!("Game Over");
+            if in_check(&board.board, false) {
+                println!("Checkmate! You win!");
+            } else {
+                println!("Stalemate! Draw!");
+            }
+
+            break;
+        }
+
+        let best_move = best_moves[0].0;
         println!("Best move: {}{}={}", square_to_algebraic(best_move.from), square_to_algebraic(best_move.to), best_move.promotion_type);
 
         println!("\nBest move list:");
-        for eval in get_best_moves(&mut board, DEPTH) {
+        for eval in best_moves {
             println!("{}{}={}: {}", square_to_algebraic(eval.0.from), square_to_algebraic(eval.0.to), eval.0.promotion_type, eval.1);
         }
         println!();
