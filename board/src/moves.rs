@@ -413,16 +413,11 @@ fn count_check(board: &GeneratorBoard, white: bool, en_passant: u64) -> (bool, u
     let mut possible_blocks: u64 = 0;
     let mut count: u64 = 0;
     for square in 0..64 {
-        if (if white {
-            board.board.black_pieces()
-        } else {
-            board.board.white_pieces()
-        } & (1u64 << square))
-            == 0
+        if (if white { board.board.black_pieces() } else { board.board.white_pieces() } & (1u64 << square)) == 0
         {
             continue;
         }
-        for piece in 0..6 {
+        for piece in 0..5 {
             if board.board.bitboards[piece] & (1u64 << square) != 0 {
                 let val = match piece {
                     0 => get_pawn_attacks(board.board, square),
@@ -430,20 +425,13 @@ fn count_check(board: &GeneratorBoard, white: bool, en_passant: u64) -> (bool, u
                     2 => get_bishop_attacks(board.board.all_pieces(), square),
                     3 => get_rook_attacks(board.board.all_pieces(), square),
                     4 => get_queen_attacks(board.board.all_pieces(), square),
-                    5 => get_king_attacks(square),
+                    // 5 => get_king_attacks(square), skip since kings cannot touch
                     _ => {
                         unreachable!("Invalid board");
                     }
                 };
 
-                if ((1u64
-                    << if white {
-                    board.white_king
-                } else {
-                    board.black_king
-                })
-                    & val)
-                    != 0
+                if ((1u64 << if white { board.white_king } else { board.black_king }) & val) != 0
                 {
                     if count == 1 {
                         return (true, 0); // double check
@@ -492,6 +480,7 @@ fn count_check(board: &GeneratorBoard, white: bool, en_passant: u64) -> (bool, u
                                     board.black_king
                                 },
                             ),
+                            // 5 => 0,
                             _ => {
                                 unreachable!("Invalid board");
                             }
@@ -1305,25 +1294,25 @@ fn get_pawn_moves(board: GeneratorBoard, square: u64, en_passant: u64) -> u64 {
 
     if is_king_top_left(&board, square, white) {
         if piece_on_bottom_right(&board, square, target_bishop) {
-            right_attacks(board.board, square, passant_square)
+            if !white { right_attacks(board.board, square, passant_square) } else { 0 }
         } else {
             all_pawn_moves(board, square, passant_square)
         }
     } else if is_king_top_right(&board, square, white) {
         if piece_on_bottom_left(&board, square, target_bishop) {
-            left_attacks(board.board, square, passant_square)
+            if !white { left_attacks(board.board, square, passant_square) } else { 0 }
         } else {
             all_pawn_moves(board, square, passant_square)
         }
     } else if is_king_bottom_left(&board, square, white) {
         if piece_on_top_right(&board, square, target_bishop) {
-            right_attacks(board.board, square, passant_square)
+            if white { right_attacks(board.board, square, passant_square) } else { 0 }
         } else {
             all_pawn_moves(board, square, passant_square)
         }
     } else if is_king_bottom_right(&board, square, white) {
         if piece_on_top_left(&board, square, target_bishop) {
-            left_attacks(board.board, square, passant_square)
+            if white { left_attacks(board.board, square, passant_square) } else { 0 }
         } else {
             all_pawn_moves(board, square, passant_square)
         }
